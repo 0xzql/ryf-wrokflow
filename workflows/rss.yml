@@ -1,17 +1,57 @@
 on:
   rss:
-    url: https://hnrss.org/newest?points=300&count=3
+    # url: https://github.com/ronething-bot/ifttt-release-demo/releases.atom
+    url: https://github.com/ruanyf/weekly/releases.atom
+    config:
+      limit: 2
+      timeZone: Asia/Shanghai
 jobs:
-  print:
-    name: Print
+  operation:
+    name: Rss Operation
     runs-on: ubuntu-latest
     steps:
       - name: Print Outputs
         env:
           title: ${{on.rss.outputs.title}}
-          contentSnippet: ${{on.rss.outputs.contentSnippet}}
           link: ${{on.rss.outputs.link}}
         run: |
           echo title: $title
-          echo contentSnippet: $contentSnippet
           echo link: $link
+      - name: rewrite url
+        id: set-link
+        uses: actions/github-script@v4
+        env:
+          link: ${{ on.rss.outputs.link }}
+        with:
+          result-encoding: string # 关键点 下面的 result 直接引用就是 string 类型
+          script: |
+            let { link } = process.env
+            console.log("link is", link)
+            let tags = link.split("/")
+            console.log("tags is", tags)
+            let tag = tags[tags.length-1]
+            console.log("tag is", tag)
+            let newLink = `https://github.com/ruanyf/weekly/blob/master/docs/${tag}.md`
+            console.log("new link is", newLink)
+            return newLink
+      - name: Post To Slack
+        uses: actionsflow/axios@v1
+        with:
+          url: ${{ secrets.SLACK_URL }}
+          method: POST
+          body: |
+            {
+              "text": "${{on.rss.outputs.title}} ${{steps.set-link.outputs.result}}"
+            }
+      - name: Post To WeCom
+        uses: actionsflow/axios@v1
+        with:
+          url: ${{ secrets.WECOM_URL }}
+          method: POST
+          body: |
+            {
+              "msgtype": "text",
+              "text": {
+                "content": "${{on.rss.outputs.title}} ${{steps.set-link.outputs.result}}"
+              }
+            }
